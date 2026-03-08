@@ -11,6 +11,7 @@ import WebKit
 import RSCore
 import Articles
 import RSWeb
+import Combine
 
 enum DetailState: Equatable {
 	case noSelection
@@ -63,6 +64,8 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 
 	private var isArticleContentJavascriptEnabled = AppDefaults.shared.isArticleContentJavascriptEnabled
 
+	private var cancellables = Set<AnyCancellable>()
+
 	override func viewDidLoad() {
 		currentWebViewController = regularWebViewController
 		NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -70,11 +73,47 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 				self?.userDefaultsDidChange()
 			}
 		}
+
+		// Set up TTS delegate
+		TTSManager.shared.delegate = self
+
+		// Sync controls immediately (model may already be loaded)
+		updateTTSControlsVisibility()
+
+		// Subscribe to future state changes
+		TTSManager.shared.$isModelLoaded
+			.receive(on: RunLoop.main)
+			.sink { [weak self] _ in self?.updateTTSControlsVisibility() }
+			.store(in: &cancellables)
+
+		TTSManager.shared.$hasAudio
+			.receive(on: RunLoop.main)
+			.sink { [weak self] _ in self?.updateTTSControlsVisibility() }
+			.store(in: &cancellables)
+	}
+
+	override func viewWillAppear() {
+		super.viewWillAppear()
+		updateTTSControlsVisibility()
+	}
+
+	private func updateTTSControlsVisibility() {
+		let tts = TTSManager.shared
+		if tts.isModelLoaded || tts.hasAudio {
+			containerView.showTTSControls()
+		} else {
+			containerView.hideTTSControls()
+		}
 	}
 
 	// MARK: - API
 
 	func setState(_ state: DetailState, mode: TimelineSourceMode) {
+		// Stop TTS when article changes
+		if TTSManager.shared.hasAudio {
+			stopTTS()
+		}
+
 		switch mode {
 		case .regular:
 			detailStateForRegular = state
@@ -115,6 +154,46 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 		}
 		window.makeFirstResponderUnlessDescendantIsFirstResponder(currentWebViewController.webView)
 	}
+
+	// MARK: - TTS
+
+	/// Starts TTS for the current article.
+	func startTTS() {
+		print("TTS-DEBUG: startTTS called, isTTSEnabled=\(AppDefaults.shared.isTTSEnabled), isModelLoaded=\(TTSManager.shared.isModelLoaded)")
+		guard AppDefaults.shared.isTTSEnabled else {
+			print("TTS-DEBUG: startTTS aborted - TTS not enabled")
+			return
+		}
+
+		let tts = TTSManager.shared
+		if !tts.isModelLoaded {
+			print("TTS-DEBUG: model not loaded, triggering download")
+			tts.downloadAndLoadModel()
+		}
+
+		// Extract text from the web view
+		print("TTS-DEBUG: extracting article text...")
+		currentWebViewController.extractArticleText { [weak self] text in
+			print("TTS-DEBUG: extractArticleText returned text=\(text.map { "\($0.prefix(80))..." } ?? "nil")")
+			guard let self, let text, !text.isEmpty else {
+				print("TTS-DEBUG: text is nil or empty, aborting")
+				return
+			}
+
+			// Start TTS first — say() calls stop() internally which clears any
+			// previous highlighting. Preparing spans after ensures they aren't wiped.
+			tts.say(text)
+
+			// Prepare word highlighting after stop() has already run
+			self.currentWebViewController.prepareHighlighting()
+		}
+	}
+
+	/// Stops TTS and clears highlighting.
+	func stopTTS() {
+		TTSManager.shared.stop()
+		currentWebViewController.clearHighlighting()
+	}
 }
 
 // MARK: - DetailWebViewControllerDelegate
@@ -133,6 +212,27 @@ extension DetailViewController: DetailWebViewControllerDelegate {
 			return
 		}
 		statusBarView.mouseoverLink = nil
+	}
+}
+
+// MARK: - TTSManagerDelegate
+
+extension DetailViewController: TTSManagerDelegate {
+
+	func ttsDidStartPlaying() {
+		// Controls shown via Combine binding on hasAudio
+	}
+
+	func ttsDidStopPlaying() {
+		currentWebViewController.clearHighlighting()
+	}
+
+	func ttsDidUpdateCurrentTokenIndex(_ index: Int) {
+		currentWebViewController.highlightWord(at: index)
+	}
+
+	func ttsDidFinishGenerating() {
+		// No action needed
 	}
 }
 

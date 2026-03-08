@@ -44,6 +44,11 @@ final class AppDefaults: Sendable {
 		static let currentThemeName = "currentThemeName"
 		static let articleContentJavascriptEnabled = "articleContentJavascriptEnabled"
 
+		// TTS prefs
+		static let ttsEnabled = "ttsEnabled"
+		static let ttsSelectedVoice = "ttsSelectedVoice"
+		static let ttsSpeechSpeed = "ttsSpeechSpeed"
+
 		// Hidden prefs
 		static let showDebugMenu = "ShowDebugMenu"
 		static let timelineShowsSeparators = "CorreiaSeparators"
@@ -316,6 +321,36 @@ final class AppDefaults: Sendable {
 		}
 	}
 
+	// MARK: - TTS Settings
+
+	var isTTSEnabled: Bool {
+		get {
+			return AppDefaults.bool(for: Key.ttsEnabled)
+		}
+		set {
+			AppDefaults.setBool(for: Key.ttsEnabled, newValue)
+		}
+	}
+
+	var ttsSelectedVoice: String? {
+		get {
+			return AppDefaults.string(for: Key.ttsSelectedVoice)
+		}
+		set {
+			AppDefaults.setString(for: Key.ttsSelectedVoice, newValue)
+		}
+	}
+
+	var ttsSpeechSpeed: Float {
+		get {
+			let speed = UserDefaults.standard.float(forKey: Key.ttsSpeechSpeed)
+			return speed > 0 ? speed : 1.0
+		}
+		set {
+			UserDefaults.standard.set(newValue, forKey: Key.ttsSpeechSpeed)
+		}
+	}
+
 	@MainActor func registerDefaults() {
 		#if DEBUG
  		let showDebugMenu = true
@@ -333,7 +368,9 @@ final class AppDefaults: Sendable {
 			Key.refreshInterval: RefreshInterval.everyHour.rawValue,
 			Key.showDebugMenu: showDebugMenu,
 			Key.currentThemeName: Self.defaultThemeName,
-			Key.articleContentJavascriptEnabled: true
+			Key.articleContentJavascriptEnabled: true,
+			Key.ttsEnabled: false,
+			Key.ttsSpeechSpeed: 1.0
 		]
 
 		UserDefaults.standard.register(defaults: defaults)

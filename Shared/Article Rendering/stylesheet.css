@@ -567,3 +567,21 @@ a.footnote:hover,
 	}
 
 }
+
+/* TTS word highlighting */
+
+.tts-word {
+	transition: background-color 0.15s ease;
+}
+
+.tts-highlight {
+	background-color: rgba(0, 122, 255, 0.25);
+	border-radius: 3px;
+	padding: 1px 0;
+}
+
+@media (prefers-color-scheme: dark) {
+	.tts-highlight {
+		background-color: rgba(10, 132, 255, 0.35);
+	}
+}

@@ -24,6 +24,7 @@ private struct PreferencesToolbarItemSpec {
 private struct ToolbarItemIdentifier {
 	static let General = "General"
 	static let Accounts = "Accounts"
+	static let TTS = "TTS"
 	static let Advanced = "Advanced"
 }
 
@@ -39,6 +40,9 @@ final class PreferencesWindowController: NSWindowController, NSToolbarDelegate {
 		specs += [PreferencesToolbarItemSpec(identifierRawValue: ToolbarItemIdentifier.Accounts,
 											 name: NSLocalizedString("Accounts", comment: "Preferences"),
 											 image: Assets.Images.preferencesToolbarAccounts)]
+		specs += [PreferencesToolbarItemSpec(identifierRawValue: ToolbarItemIdentifier.TTS,
+											 name: NSLocalizedString("Text to Speech", comment: "Preferences"),
+											 image: NSImage(systemSymbolName: "speaker.wave.2.fill", accessibilityDescription: "Text to Speech"))]
 		specs += [PreferencesToolbarItemSpec(identifierRawValue: ToolbarItemIdentifier.Advanced,
 											 name: NSLocalizedString("Advanced", comment: "Preferences"),
 											 image: Assets.Images.preferencesToolbarAdvanced)]
@@ -153,6 +157,14 @@ private extension PreferencesWindowController {
 		}
 
 		let storyboard = NSStoryboard(name: NSStoryboard.Name("Preferences"), bundle: nil)
+
+		// TTS preferences are created programmatically, not from storyboard
+		if identifier == ToolbarItemIdentifier.TTS {
+			let viewController = TTSPreferencesViewController()
+			viewControllers[identifier] = viewController
+			return viewController
+		}
+
 		guard let viewController = storyboard.instantiateController(withIdentifier: NSStoryboard.SceneIdentifier(identifier)) as? NSViewController else {
 			assertionFailure("Unknown preferences view controller: \(identifier)")
 			return nil

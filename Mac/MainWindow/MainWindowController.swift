@@ -288,6 +288,14 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 			return validateToggleReadArticles(item)
 		}
 
+		if item.action == #selector(readArticleAloud(_:)) {
+			return AppDefaults.shared.isTTSEnabled && oneSelectedArticle != nil
+		}
+
+		if item.action == #selector(stopReadingArticle(_:)) {
+			return TTSManager.shared.hasAudio
+		}
+
 		return true
 	}
 
@@ -560,6 +568,15 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 
 	@objc func selectArticleTheme(_ menuItem: NSMenuItem) {
 		ArticleThemesManager.shared.currentThemeName = menuItem.title
+	}
+
+	@IBAction func readArticleAloud(_ sender: Any?) {
+		print("TTS-DEBUG: readArticleAloud reached MainWindowController, detailVC=\(String(describing: detailViewController))")
+		detailViewController?.startTTS()
+	}
+
+	@IBAction func stopReadingArticle(_ sender: Any?) {
+		detailViewController?.stopTTS()
 	}
 }
 
