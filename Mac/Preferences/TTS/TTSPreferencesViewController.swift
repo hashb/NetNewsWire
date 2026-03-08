@@ -14,7 +14,10 @@ final class TTSPreferencesViewController: NSViewController {
 
 	private let enableCheckbox = NSButton(checkboxWithTitle: "Enable Text-to-Speech", target: nil, action: nil)
 	private let modelStatusLabel = NSTextField(labelWithString: "")
-	private let loadModelButton = NSButton(title: "Load Model", target: nil, action: nil)
+	private let loadModelButton = NSButton(title: "Download & Load Model", target: nil, action: nil)
+	private let openModelFolderButton = NSButton(title: "Open Model Folder", target: nil, action: nil)
+	private let downloadProgressBar = NSProgressIndicator()
+	private let modelErrorLabel = NSTextField(wrappingLabelWithString: "")
 	private let voiceLabel = NSTextField(labelWithString: "Voice:")
 	private let voicePopup = NSPopUpButton()
 	private let speedLabel = NSTextField(labelWithString: "Speed:")
@@ -27,7 +30,7 @@ final class TTSPreferencesViewController: NSViewController {
 	// MARK: - Lifecycle
 
 	override func loadView() {
-		let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 260))
+		let containerView = NSView(frame: NSRect(x: 0, y: 0, width: 480, height: 310))
 		self.view = containerView
 		setupUI()
 		bindState()
@@ -58,6 +61,27 @@ final class TTSPreferencesViewController: NSViewController {
 		loadModelButton.action = #selector(loadModelTapped)
 		loadModelButton.translatesAutoresizingMaskIntoConstraints = false
 
+		// Open model folder button
+		openModelFolderButton.bezelStyle = .rounded
+		openModelFolderButton.target = self
+		openModelFolderButton.action = #selector(openModelFolderTapped)
+		openModelFolderButton.translatesAutoresizingMaskIntoConstraints = false
+
+		// Download progress bar
+		downloadProgressBar.style = .bar
+		downloadProgressBar.isIndeterminate = false
+		downloadProgressBar.minValue = 0
+		downloadProgressBar.maxValue = 1
+		downloadProgressBar.doubleValue = 0
+		downloadProgressBar.isHidden = true
+		downloadProgressBar.translatesAutoresizingMaskIntoConstraints = false
+
+		// Error label
+		modelErrorLabel.font = .systemFont(ofSize: 11)
+		modelErrorLabel.textColor = .systemRed
+		modelErrorLabel.isHidden = true
+		modelErrorLabel.translatesAutoresizingMaskIntoConstraints = false
+
 		// Voice label and popup
 		voiceLabel.alignment = .right
 		voiceLabel.translatesAutoresizingMaskIntoConstraints = false
@@ -87,6 +111,9 @@ final class TTSPreferencesViewController: NSViewController {
 		view.addSubview(enableCheckbox)
 		view.addSubview(modelStatusLabel)
 		view.addSubview(loadModelButton)
+		view.addSubview(openModelFolderButton)
+		view.addSubview(downloadProgressBar)
+		view.addSubview(modelErrorLabel)
 		view.addSubview(voiceLabel)
 		view.addSubview(voicePopup)
 		view.addSubview(speedLabel)
@@ -108,8 +135,22 @@ final class TTSPreferencesViewController: NSViewController {
 			loadModelButton.centerYAnchor.constraint(equalTo: modelStatusLabel.centerYAnchor),
 			loadModelButton.leadingAnchor.constraint(equalTo: modelStatusLabel.trailingAnchor, constant: 12),
 
+			// Open model folder button
+			openModelFolderButton.centerYAnchor.constraint(equalTo: modelStatusLabel.centerYAnchor),
+			openModelFolderButton.leadingAnchor.constraint(equalTo: loadModelButton.trailingAnchor, constant: 8),
+
+			// Download progress bar
+			downloadProgressBar.topAnchor.constraint(equalTo: modelStatusLabel.bottomAnchor, constant: 8),
+			downloadProgressBar.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+			downloadProgressBar.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+
+			// Error label
+			modelErrorLabel.topAnchor.constraint(equalTo: downloadProgressBar.bottomAnchor, constant: 4),
+			modelErrorLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
+			modelErrorLabel.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -20),
+
 			// Voice label
-			voiceLabel.topAnchor.constraint(equalTo: modelStatusLabel.bottomAnchor, constant: 20),
+			voiceLabel.topAnchor.constraint(equalTo: modelErrorLabel.bottomAnchor, constant: 14),
 			voiceLabel.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 20),
 			voiceLabel.widthAnchor.constraint(equalToConstant: 50),
 
@@ -164,6 +205,34 @@ final class TTSPreferencesViewController: NSViewController {
 				self?.updateVoicePopup()
 			}
 			.store(in: &cancellables)
+
+		tts.$modelLoadError
+			.receive(on: RunLoop.main)
+			.sink { [weak self] _ in
+				self?.updateUI()
+			}
+			.store(in: &cancellables)
+
+		tts.$isDownloading
+			.receive(on: RunLoop.main)
+			.sink { [weak self] _ in
+				self?.updateUI()
+			}
+			.store(in: &cancellables)
+
+		tts.$downloadProgress
+			.receive(on: RunLoop.main)
+			.sink { [weak self] progress in
+				self?.downloadProgressBar.doubleValue = progress
+			}
+			.store(in: &cancellables)
+
+		tts.$downloadStatus
+			.receive(on: RunLoop.main)
+			.sink { [weak self] status in
+				self?.modelStatusLabel.stringValue = status.isEmpty ? "Downloading…" : status
+			}
+			.store(in: &cancellables)
 	}
 
 	private func updateUI() {
@@ -171,18 +240,33 @@ final class TTSPreferencesViewController: NSViewController {
 		let isEnabled = AppDefaults.shared.isTTSEnabled
 		let isLoaded = tts.isModelLoaded
 		let isLoading = tts.isModelLoading
+		let isDownloading = tts.isDownloading
 
-		if isLoading {
+		if isDownloading {
+			// Status label is updated live via downloadStatus publisher
+			loadModelButton.isEnabled = false
+			downloadProgressBar.isHidden = false
+		} else if isLoading {
 			modelStatusLabel.stringValue = "Loading model…"
 			loadModelButton.isEnabled = false
+			downloadProgressBar.isHidden = true
 		} else if isLoaded {
 			modelStatusLabel.stringValue = "Model loaded ✓"
-			loadModelButton.title = "Reload"
+			loadModelButton.title = "Reload Model"
 			loadModelButton.isEnabled = isEnabled
+			downloadProgressBar.isHidden = true
 		} else {
 			modelStatusLabel.stringValue = "Model not loaded"
-			loadModelButton.title = "Load Model"
+			loadModelButton.title = "Download & Load Model"
 			loadModelButton.isEnabled = isEnabled
+			downloadProgressBar.isHidden = true
+		}
+
+		if let error = tts.modelLoadError {
+			modelErrorLabel.stringValue = error
+			modelErrorLabel.isHidden = false
+		} else {
+			modelErrorLabel.isHidden = true
 		}
 
 		voicePopup.isEnabled = isEnabled && isLoaded
@@ -221,14 +305,21 @@ final class TTSPreferencesViewController: NSViewController {
 		AppDefaults.shared.isTTSEnabled = isEnabled
 
 		if isEnabled && !TTSManager.shared.isModelLoaded {
-			TTSManager.shared.loadModel()
+			TTSManager.shared.downloadAndLoadModel()
 		}
 
 		updateUI()
 	}
 
 	@objc private func loadModelTapped() {
-		TTSManager.shared.loadModel()
+		TTSManager.shared.downloadAndLoadModel()
+	}
+
+	@objc private func openModelFolderTapped() {
+		let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+		let ttsDir = appSupport.appendingPathComponent("NetNewsWire/TTS", isDirectory: true)
+		try? FileManager.default.createDirectory(at: ttsDir, withIntermediateDirectories: true)
+		NSWorkspace.shared.open(ttsDir)
 	}
 
 	@objc private func voiceChanged() {

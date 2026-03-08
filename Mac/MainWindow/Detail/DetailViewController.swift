@@ -77,18 +77,33 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 		// Set up TTS delegate
 		TTSManager.shared.delegate = self
 
-		// Observe TTS hasAudio to show/hide controls
+		// Sync controls immediately (model may already be loaded)
+		updateTTSControlsVisibility()
+
+		// Subscribe to future state changes
+		TTSManager.shared.$isModelLoaded
+			.receive(on: RunLoop.main)
+			.sink { [weak self] _ in self?.updateTTSControlsVisibility() }
+			.store(in: &cancellables)
+
 		TTSManager.shared.$hasAudio
 			.receive(on: RunLoop.main)
-			.sink { [weak self] hasAudio in
-				guard let self else { return }
-				if hasAudio {
-					self.containerView.showTTSControls()
-				} else {
-					self.containerView.hideTTSControls()
-				}
-			}
+			.sink { [weak self] _ in self?.updateTTSControlsVisibility() }
 			.store(in: &cancellables)
+	}
+
+	override func viewWillAppear() {
+		super.viewWillAppear()
+		updateTTSControlsVisibility()
+	}
+
+	private func updateTTSControlsVisibility() {
+		let tts = TTSManager.shared
+		if tts.isModelLoaded || tts.hasAudio {
+			containerView.showTTSControls()
+		} else {
+			containerView.hideTTSControls()
+		}
 	}
 
 	// MARK: - API
@@ -144,22 +159,33 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 
 	/// Starts TTS for the current article.
 	func startTTS() {
-		guard AppDefaults.shared.isTTSEnabled else { return }
+		print("TTS-DEBUG: startTTS called, isTTSEnabled=\(AppDefaults.shared.isTTSEnabled), isModelLoaded=\(TTSManager.shared.isModelLoaded)")
+		guard AppDefaults.shared.isTTSEnabled else {
+			print("TTS-DEBUG: startTTS aborted - TTS not enabled")
+			return
+		}
 
 		let tts = TTSManager.shared
 		if !tts.isModelLoaded {
-			tts.loadModel()
+			print("TTS-DEBUG: model not loaded, triggering download")
+			tts.downloadAndLoadModel()
 		}
 
 		// Extract text from the web view
+		print("TTS-DEBUG: extracting article text...")
 		currentWebViewController.extractArticleText { [weak self] text in
-			guard let self, let text, !text.isEmpty else { return }
+			print("TTS-DEBUG: extractArticleText returned text=\(text.map { "\($0.prefix(80))..." } ?? "nil")")
+			guard let self, let text, !text.isEmpty else {
+				print("TTS-DEBUG: text is nil or empty, aborting")
+				return
+			}
 
-			// Prepare word highlighting
-			self.currentWebViewController.prepareHighlighting()
-
-			// Start TTS
+			// Start TTS first — say() calls stop() internally which clears any
+			// previous highlighting. Preparing spans after ensures they aren't wiped.
 			tts.say(text)
+
+			// Prepare word highlighting after stop() has already run
+			self.currentWebViewController.prepareHighlighting()
 		}
 	}
 

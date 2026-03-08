@@ -495,6 +495,19 @@
                                                 <action selector="openArticleInBrowser:" target="Ady-hI-5gd" id="Frq-Uo-DQs"/>
                                             </connections>
                                         </menuItem>
+                                        <menuItem isSeparatorItem="YES" id="tts-sep-001"/>
+                                        <menuItem title="Read Aloud" keyEquivalent="r" id="tts-read-001">
+                                            <modifierMask key="keyEquivalentModifierMask" shift="YES" command="YES"/>
+                                            <connections>
+                                                <action selector="readArticleAloud:" target="Ady-hI-5gd" id="tts-read-act-001"/>
+                                            </connections>
+                                        </menuItem>
+                                        <menuItem title="Stop Reading" keyEquivalent="" id="tts-stop-001">
+                                            <modifierMask key="keyEquivalentModifierMask"/>
+                                            <connections>
+                                                <action selector="stopReadingArticle:" target="Ady-hI-5gd" id="tts-stop-act-001"/>
+                                            </connections>
+                                        </menuItem>
                                     </items>
                                 </menu>
                             </menuItem>

@@ -565,6 +565,7 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 	}
 
 	@IBAction func readArticleAloud(_ sender: Any?) {
+		print("TTS-DEBUG: readArticleAloud reached MainWindowController, detailVC=\(String(describing: detailViewController))")
 		detailViewController?.startTTS()
 	}
 

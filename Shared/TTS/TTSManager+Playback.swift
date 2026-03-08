@@ -66,6 +66,7 @@ extension TTSManager {
 		timer?.invalidate()
 		timer = nil
 		playerNode?.stop()
+		audioEngine?.stop()
 		isPlaying = false
 		hasAudio = false
 		currentTime = 0.0
@@ -151,22 +152,25 @@ extension TTSManager {
 		}
 	}
 
-	/// Updates the current token index based on playback position.
+	/// Updates the current word-span index based on playback position.
+	/// Only counts tokens that contain at least one letter so the index aligns
+	/// with the word spans created by ttsPrepareHighlighting() in the web view.
 	func updateFollowAlongText() {
-		var newTokenIndex = -1
+		var newWordIndex = -1
+		var wordSpanIdx = 0
 
-		for (index, token) in allTokens.enumerated() {
-			if let start = token.start_ts, start <= currentTime {
-				if let end = token.end_ts, currentTime < end {
-					newTokenIndex = index
-				} else if let end = token.end_ts, currentTime >= end {
-					if index == allTokens.count - 1 {
-						newTokenIndex = index
-					}
-				}
+		for token in allTokens {
+			guard token.text.contains(where: { $0.isLetter }) else {
+				continue
 			}
+
+			if let start = token.start_ts, start <= currentTime {
+				newWordIndex = wordSpanIdx
+			}
+
+			wordSpanIdx += 1
 		}
 
-		currentTokenIndex = newTokenIndex
+		currentTokenIndex = newWordIndex
 	}
 }

@@ -13,6 +13,7 @@ import Combine
 
 	// MARK: - UI Elements
 
+	private let readAloudButton = NSButton()
 	private let rewindButton = NSButton()
 	private let playPauseButton = NSButton()
 	private let forwardButton = NSButton()
@@ -44,6 +45,19 @@ import Combine
 
 	private func setupUI() {
 		wantsLayer = true
+		layer?.backgroundColor = NSColor.windowBackgroundColor.cgColor
+
+		// Configure read aloud button (shown when no audio is active)
+		readAloudButton.bezelStyle = .rounded
+		readAloudButton.title = "Read Aloud"
+		if let img = NSImage(systemSymbolName: "play.fill", accessibilityDescription: nil) {
+			readAloudButton.image = img
+		}
+		readAloudButton.imagePosition = .imageLeading
+		readAloudButton.target = self
+		readAloudButton.action = #selector(readAloudTapped)
+		readAloudButton.toolTip = "Read Article Aloud"
+		readAloudButton.translatesAutoresizingMaskIntoConstraints = false
 
 		// Configure rewind button
 		rewindButton.bezelStyle = .accessoryBarAction
@@ -92,6 +106,7 @@ import Combine
 		separator.translatesAutoresizingMaskIntoConstraints = false
 
 		// Add subviews
+		addSubview(readAloudButton)
 		addSubview(rewindButton)
 		addSubview(playPauseButton)
 		addSubview(forwardButton)
@@ -105,6 +120,10 @@ import Combine
 		NSLayoutConstraint.activate([
 			// Height
 			heightAnchor.constraint(equalToConstant: Self.controlsHeight),
+
+			// Read aloud button (centred in bar)
+			readAloudButton.centerYAnchor.constraint(equalTo: centerYAnchor),
+			readAloudButton.centerXAnchor.constraint(equalTo: centerXAnchor),
 
 			// Rewind button
 			rewindButton.centerYAnchor.constraint(equalTo: centerYAnchor),
@@ -135,10 +154,10 @@ import Combine
 			stopButton.widthAnchor.constraint(equalToConstant: 24),
 			stopButton.heightAnchor.constraint(equalToConstant: 24),
 
-			// Separator at bottom
+			// Separator at top
 			separator.leadingAnchor.constraint(equalTo: leadingAnchor),
 			separator.trailingAnchor.constraint(equalTo: trailingAnchor),
-			separator.bottomAnchor.constraint(equalTo: bottomAnchor),
+			separator.topAnchor.constraint(equalTo: topAnchor),
 		])
 	}
 
@@ -146,6 +165,20 @@ import Combine
 
 	private func bindToTTSManager() {
 		let tts = TTSManager.shared
+
+		tts.$hasAudio
+			.receive(on: RunLoop.main)
+			.sink { [weak self] hasAudio in
+				guard let self else { return }
+				// "Read Aloud" button shown when idle; playback controls shown when active
+				self.readAloudButton.isHidden = hasAudio
+				self.rewindButton.isHidden = !hasAudio
+				self.playPauseButton.isHidden = !hasAudio
+				self.forwardButton.isHidden = !hasAudio
+				self.timeLabel.isHidden = !hasAudio
+				self.stopButton.isHidden = !hasAudio
+			}
+			.store(in: &cancellables)
 
 		tts.$isPlaying
 			.receive(on: RunLoop.main)
@@ -168,6 +201,12 @@ import Combine
 	}
 
 	// MARK: - Actions
+
+	@objc private func readAloudTapped() {
+		print("TTS-DEBUG: readAloudTapped fired")
+		let result = NSApp.sendAction(#selector(MainWindowController.readArticleAloud(_:)), to: nil, from: self)
+		print("TTS-DEBUG: sendAction result = \(result)")
+	}
 
 	@objc private func rewindTapped() {
 		TTSManager.shared.seekBackward10s()

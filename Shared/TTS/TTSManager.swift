@@ -6,9 +6,9 @@
 //
 
 @preconcurrency import AVFoundation
-import AudioToolbox
 @preconcurrency import MLX
 import Foundation
+import CommonCrypto
 @preconcurrency import KokoroSwift
 import Combine
 import MLXUtilsLibrary
@@ -54,6 +54,18 @@ private struct UncheckedSendable<T>: @unchecked Sendable {
 
 	/// Whether the model is currently loading
 	@Published private(set) var isModelLoading: Bool = false
+
+	/// Whether model files are being downloaded
+	@Published private(set) var isDownloading: Bool = false
+
+	/// Overall download progress (0.0 – 1.0)
+	@Published private(set) var downloadProgress: Double = 0.0
+
+	/// Human-readable download status message
+	@Published private(set) var downloadStatus: String = ""
+
+	/// Error message from the last failed load/download attempt, if any
+	@Published private(set) var modelLoadError: String?
 
 	// MARK: - Audio Engine
 
@@ -141,15 +153,162 @@ private struct UncheckedSendable<T>: @unchecked Sendable {
 
 	// MARK: - Model Loading
 
-	/// Loads the TTS model and voices. Call this when TTS is first enabled or model is downloaded.
-	func loadModel() {
+	/// The directory where TTS model files are stored.
+	static var ttsModelDirectory: URL {
+		let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+		return appSupport.appendingPathComponent("NetNewsWire/TTS", isDirectory: true)
+	}
+
+	/// Returns true if both model files exist on disk.
+	static var modelFilesExist: Bool {
+		let dir = ttsModelDirectory
+		return FileManager.default.fileExists(atPath: dir.appendingPathComponent("kokoro-v1_0.safetensors").path) &&
+			   FileManager.default.fileExists(atPath: dir.appendingPathComponent("voices.npz").path)
+	}
+
+	/// Downloads model files from GitHub (if needed) then loads the model.
+	/// This is what the "Load Model" button should call.
+	func downloadAndLoadModel() {
+		guard !isModelLoaded, !isModelLoading, !isDownloading else { return }
+
+		modelLoadError = nil
+
+		if TTSManager.modelFilesExist {
+			loadModelFromDisk()
+			return
+		}
+
+		isDownloading = true
+		downloadProgress = 0.0
+
+		let baseURL = "https://github.com/hashb/KokoroTTS/releases/download/v1.2.1"
+		let files: [(name: String, sha256: String)] = [
+			("kokoro-v1_0.safetensors", "4e9ecdf03b8b6cf906070390237feda473dc13327cb8d56a43deaa374c02acd8"),
+			("voices.npz",              "56dbfa2f2970af2e395397020393d368c5f441d09b3de4e9b77f6222e790f10f"),
+		]
+
+		Task {
+			do {
+				let dir = TTSManager.ttsModelDirectory
+				try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+
+				for (index, file) in files.enumerated() {
+					let dest = dir.appendingPathComponent(file.name)
+
+					// Skip if file already exists and hash matches
+					if FileManager.default.fileExists(atPath: dest.path),
+					   sha256(of: dest) == file.sha256 {
+						let progress = Double(index + 1) / Double(files.count)
+						await MainActor.run {
+							downloadProgress = progress
+							downloadStatus = "\(file.name) already downloaded"
+						}
+						continue
+					}
+
+					await MainActor.run {
+						downloadStatus = "Downloading \(file.name)…"
+					}
+
+					let url = URL(string: "\(baseURL)/\(file.name)")!
+					try await downloadFile(from: url, to: dest, fileIndex: index, fileCount: files.count)
+
+					guard sha256(of: dest) == file.sha256 else {
+						try? FileManager.default.removeItem(at: dest)
+						throw DownloadError.hashMismatch(file.name)
+					}
+				}
+
+				await MainActor.run {
+					isDownloading = false
+					downloadStatus = ""
+					loadModelFromDisk()
+				}
+			} catch {
+				await MainActor.run {
+					isDownloading = false
+					downloadStatus = ""
+					modelLoadError = "Download failed: \(error.localizedDescription)"
+					print("TTS download error: \(error)")
+				}
+			}
+		}
+	}
+
+	private enum DownloadError: LocalizedError {
+		case hashMismatch(String)
+		var errorDescription: String? {
+			switch self {
+			case .hashMismatch(let name): return "SHA-256 mismatch for \(name) — file may be corrupted"
+			}
+		}
+	}
+
+	/// Downloads a single file with progress reporting using URLSession download task.
+	/// Each file contributes an equal share of the overall `downloadProgress`.
+	private func downloadFile(from url: URL, to dest: URL, fileIndex: Int, fileCount: Int) async throws {
+		// Holder keeps the KVO observation alive for the duration of the download.
+		final class ProgressHolder: @unchecked Sendable {
+			var observation: NSKeyValueObservation?
+		}
+
+		let tempURL: URL = try await withCheckedThrowingContinuation { continuation in
+			let holder = ProgressHolder()
+			let task = URLSession.shared.downloadTask(with: url) { tempURL, _, error in
+				holder.observation = nil  // release observation after task completes
+				if let error {
+					continuation.resume(throwing: error)
+				} else if let tempURL {
+					continuation.resume(returning: tempURL)
+				} else {
+					continuation.resume(throwing: URLError(.unknown))
+				}
+			}
+
+			holder.observation = task.progress.observe(\.fractionCompleted) { [weak self] progress, _ in
+				let fileProgress = progress.fractionCompleted
+				let overall = (Double(fileIndex) + fileProgress) / Double(fileCount)
+				let received = Double(task.countOfBytesReceived) / 1_048_576
+				let total = task.countOfBytesExpectedToReceive > 0
+					? String(format: " / %.0f MB", Double(task.countOfBytesExpectedToReceive) / 1_048_576)
+					: ""
+				DispatchQueue.main.async {
+					self?.downloadProgress = overall
+					self?.downloadStatus = "Downloading \(url.lastPathComponent): \(String(format: "%.0f", received)) MB\(total)"
+				}
+			}
+			task.resume()
+		}
+
+		// Move from temp location to final destination
+		if FileManager.default.fileExists(atPath: dest.path) {
+			try FileManager.default.removeItem(at: dest)
+		}
+		try FileManager.default.moveItem(at: tempURL, to: dest)
+	}
+
+	/// Computes the SHA-256 hex digest of a file.
+	private func sha256(of url: URL) -> String? {
+		guard let data = try? Data(contentsOf: url) else { return nil }
+		var digest = [UInt8](repeating: 0, count: Int(CC_SHA256_DIGEST_LENGTH))
+		data.withUnsafeBytes { _ = CC_SHA256($0.baseAddress, CC_LONG(data.count), &digest) }
+		return digest.map { String(format: "%02x", $0) }.joined()
+	}
+
+	/// Loads already-downloaded model files from disk into memory.
+	private func loadModelFromDisk() {
 		guard !isModelLoaded, !isModelLoading else { return }
 
 		isModelLoading = true
+		modelLoadError = nil
 
-		guard let modelPath = Bundle.main.url(forResource: "kokoro-v1_0", withExtension: "safetensors"),
-			  let voiceFilePath = Bundle.main.url(forResource: "voices", withExtension: "npz") else {
-			print("TTS model files not found in bundle")
+		let dir = TTSManager.ttsModelDirectory
+		let modelPath = dir.appendingPathComponent("kokoro-v1_0.safetensors")
+		let voiceFilePath = dir.appendingPathComponent("voices.npz")
+
+		guard FileManager.default.fileExists(atPath: modelPath.path),
+			  FileManager.default.fileExists(atPath: voiceFilePath.path) else {
+			modelLoadError = "Model files not found in \(dir.path)"
 			isModelLoading = false
 			return
 		}
@@ -182,6 +341,7 @@ private struct UncheckedSendable<T>: @unchecked Sendable {
 
 				self.isModelLoaded = true
 				self.isModelLoading = false
+				self.modelLoadError = nil
 
 				// Set up audio engine
 				self.setupAudioEngine()
@@ -206,8 +366,9 @@ private struct UncheckedSendable<T>: @unchecked Sendable {
 	/// Converts the provided text to speech and plays it.
 	/// - Parameter text: The plain text to be converted to speech
 	func say(_ text: String) {
+		print("TTS-DEBUG: say() called, isModelLoaded=\(isModelLoaded), kokoroEngine=\(kokoroTTSEngine != nil), audioEngine=\(audioEngine != nil), playerNode=\(playerNode != nil), selectedVoice='\(selectedVoice)'")
 		guard isModelLoaded, let engine = kokoroTTSEngine, let audioEngine, let playerNode else {
-			print("TTS model not loaded")
+			print("TTS-DEBUG: say() guard failed — model or audio engine not ready")
 			return
 		}
 
@@ -224,32 +385,33 @@ private struct UncheckedSendable<T>: @unchecked Sendable {
 		processedText = convertParentheticalsToDashes(processedText)
 		processedText = convertSlashesToDashes(processedText)
 		let chunks = splitIntoChunks(processedText, sentencesPerChunk: 2)
-		print("TTS: Split text into \(chunks.count) chunk(s)")
+		print("TTS-DEBUG: split into \(chunks.count) chunks, voice='\(selectedVoice)', voices.keys=\(voices.keys.sorted())")
 
 		let sampleRate = Double(KokoroTTS.Constants.samplingRate)
 		let format = AVAudioFormat(standardFormatWithSampleRate: sampleRate, channels: 1)!
 		audioFormat = format
 
-		// Connect the player node
+		// Connect the player node and start the engine
+		print("TTS-DEBUG: connecting player node, engine.isRunning=\(audioEngine.isRunning)")
 		audioEngine.connect(playerNode, to: audioEngine.mainMixerNode, format: format)
-
-		// Request a larger buffer size
-		let outputUnit = audioEngine.outputNode.audioUnit!
-		var bufferSize: UInt32 = 2048
-		AudioUnitSetProperty(
-			outputUnit,
-			kAudioDevicePropertyBufferFrameSize,
-			kAudioUnitScope_Global,
-			0,
-			&bufferSize,
-			UInt32(MemoryLayout<UInt32>.size)
-		)
-
-		// Start the audio engine
 		do {
 			try audioEngine.start()
+			print("TTS-DEBUG: audio engine started successfully")
 		} catch {
-			print("Audio engine failed to start: \(error.localizedDescription)")
+			print("TTS-DEBUG: audio engine failed to start: \(error)")
+			isGeneratingAudio = false
+			return
+		}
+
+		guard !voices.isEmpty else {
+			print("TTS-DEBUG: voices dictionary is empty — model may not have loaded voices correctly")
+			audioEngine.stop()
+			isGeneratingAudio = false
+			return
+		}
+		guard voices[selectedVoice + ".npy"] != nil else {
+			print("TTS-DEBUG: voice '\(selectedVoice).npy' not found in voices dict. Available: \(voices.keys.sorted())")
+			audioEngine.stop()
 			isGeneratingAudio = false
 			return
 		}

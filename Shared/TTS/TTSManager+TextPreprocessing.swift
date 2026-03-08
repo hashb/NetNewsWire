@@ -107,8 +107,12 @@ extension TTSManager {
 		var chunks: [String] = []
 
 		for section in sections {
-			let pattern = "(?<=[.!?][\"\\u{201C}\\u{201D}]?)\\s+"
-			let regex = try! NSRegularExpression(pattern: pattern)
+			// ICU lookbehinds require fixed length — use alternation instead of `?`
+			let pattern = "(?<=[.!?]|[.!?][\"\\u{201C}\\u{201D}])\\s+"
+			guard let regex = try? NSRegularExpression(pattern: pattern) else {
+				chunks.append(section)
+				continue
+			}
 			let range = NSRange(section.startIndex..., in: section)
 
 			var sentences: [String] = []

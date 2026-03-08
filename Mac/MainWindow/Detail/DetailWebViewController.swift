@@ -94,6 +94,9 @@ final class DetailWebViewController: NSViewController {
 		   let ttsJS = try? String(contentsOf: ttsJSURL, encoding: .utf8) {
 			let ttsScript = WKUserScript(source: ttsJS, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
 			configuration.userContentController.addUserScript(ttsScript)
+			print("TTS-DEBUG: tts_highlight.js injected successfully")
+		} else {
+			print("TTS-DEBUG: WARNING — tts_highlight.js not found in bundle")
 		}
 
 		webView = DetailWebView(frame: NSRect.zero, configuration: configuration)
@@ -198,13 +201,19 @@ final class DetailWebViewController: NSViewController {
 		webView.evaluateJavaScript("ttsPrepareHighlighting()") { result, error in
 			if let error {
 				print("TTS: Error preparing highlighting: \(error)")
+			} else {
+				print("TTS-DEBUG: prepareHighlighting done, wordCount=\(result ?? "?")")
 			}
 		}
 	}
 
 	/// Highlights the word at the given index.
 	func highlightWord(at index: Int) {
-		webView.evaluateJavaScript("ttsHighlightWord(\(index))")
+		webView.evaluateJavaScript("ttsHighlightWord(\(index))") { _, error in
+			if let error {
+				print("TTS: Error highlighting word \(index): \(error)")
+			}
+		}
 	}
 
 	/// Clears all TTS word highlighting.

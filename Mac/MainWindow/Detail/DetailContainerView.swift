@@ -32,7 +32,7 @@ final class DetailContainerView: NSView {
 		ttsControlsView = controls
 
 		let constraints = [
-			controls.topAnchor.constraint(equalTo: topAnchor),
+			controls.bottomAnchor.constraint(equalTo: bottomAnchor),
 			controls.leadingAnchor.constraint(equalTo: leadingAnchor),
 			controls.trailingAnchor.constraint(equalTo: trailingAnchor)
 		]
@@ -88,10 +88,10 @@ final class DetailContainerView: NSView {
 
 		if let ttsControlsView {
 			constraints = [
-				contentView.topAnchor.constraint(equalTo: ttsControlsView.bottomAnchor),
+				contentView.topAnchor.constraint(equalTo: topAnchor),
 				contentView.leadingAnchor.constraint(equalTo: leadingAnchor),
 				contentView.trailingAnchor.constraint(equalTo: trailingAnchor),
-				contentView.bottomAnchor.constraint(equalTo: bottomAnchor)
+				contentView.bottomAnchor.constraint(equalTo: ttsControlsView.topAnchor)
 			]
 		} else {
 			constraints = constraintsToMakeSubViewFullSize(contentView)

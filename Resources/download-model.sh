@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Downloads KokoroTTS model weights into the directory where this script lives.
+# Downloads KokoroTTS model weights to ~/Library/Application Support/NetNewsWire/TTS/
+# so the app can find them at runtime.
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DEST_DIR="$HOME/Library/Application Support/NetNewsWire/TTS"
+mkdir -p "$DEST_DIR"
 
 BASE_URL="https://github.com/hashb/KokoroTTS/releases/download/v1.2.1"
 
@@ -31,10 +33,12 @@ verify_sha256() {
     echo "  verified: $file"
 }
 
+echo "Downloading models to: $DEST_DIR"
+
 for i in "${!FILENAMES[@]}"; do
     filename="${FILENAMES[$i]}"
     expected_hash="${HASHES[$i]}"
-    dest="$SCRIPT_DIR/$filename"
+    dest="$DEST_DIR/$filename"
 
     if [[ -f "$dest" ]]; then
         echo "Checking existing $filename..."
@@ -52,4 +56,4 @@ for i in "${!FILENAMES[@]}"; do
     verify_sha256 "$dest" "$expected_hash"
 done
 
-echo "Done."
+echo "Done. Model files are in: $DEST_DIR"
