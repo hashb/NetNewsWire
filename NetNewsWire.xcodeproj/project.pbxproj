@@ -72,6 +72,8 @@
 		84EE43492DB8A441009D3A8D /* RSDatabase in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 84EE43472DB8A441009D3A8D /* RSDatabase */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		84EE434B2DB8A44C009D3A8D /* RSDatabase in Frameworks */ = {isa = PBXBuildFile; productRef = 84EE434A2DB8A44C009D3A8D /* RSDatabase */; };
 		84EE434C2DB8A44C009D3A8D /* RSDatabase in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 84EE434A2DB8A44C009D3A8D /* RSDatabase */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
+		DC4D73D52F5D1FED003A3A0E /* KokoroSwift in Frameworks */ = {isa = PBXBuildFile; productRef = DC4D73D42F5D1FED003A3A0E /* KokoroSwift */; };
+		DC4D73D82F5D1FED003A3A0E /* MLXUtilsLibrary in Frameworks */ = {isa = PBXBuildFile; productRef = DC4D73D72F5D1FED003A3A0E /* MLXUtilsLibrary */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -411,6 +413,11 @@
 				ShareExtension/ShareDefaultContainer.swift,
 				SmartFeeds/SmartFeedPasteboardWriter.swift,
 				Timer/AccountRefreshTimer.swift,
+				"TTS/TTSManager+AudioHelpers.swift",
+				"TTS/TTSManager+MediaControls.swift",
+				"TTS/TTSManager+Playback.swift",
+				"TTS/TTSManager+TextPreprocessing.swift",
+				TTS/TTSManager.swift,
 			);
 			target = 840D617B2029031C009BC708 /* NetNewsWire-iOS */;
 		};
@@ -581,6 +588,8 @@
 				8424B3182DB73D4C0053AA11 /* RSParser in Frameworks */,
 				848E84D02DB749440023F3BA /* RSCoreResources in Frameworks */,
 				513277642590FC640064F1E7 /* SyncDatabase in Frameworks */,
+				DC4D73D52F5D1FED003A3A0E /* KokoroSwift in Frameworks */,
+				DC4D73D82F5D1FED003A3A0E /* MLXUtilsLibrary in Frameworks */,
 				17192ADA2567B3D500AAEACA /* RSSparkle in Frameworks */,
 				5132775E2590FC640064F1E7 /* Articles in Frameworks */,
 				84EE43482DB8A441009D3A8D /* RSDatabase in Frameworks */,
@@ -869,6 +878,8 @@
 				848E84CF2DB749440023F3BA /* RSCoreResources */,
 				84EE3F112DB8A088009D3A8D /* RSTree */,
 				84EE43472DB8A441009D3A8D /* RSDatabase */,
+				DC4D73D42F5D1FED003A3A0E /* KokoroSwift */,
+				DC4D73D72F5D1FED003A3A0E /* MLXUtilsLibrary */,
 			);
 			productName = NetNewsWire;
 			productReference = 849C64601ED37A5D003D8FC0 /* NetNewsWire.app */;
@@ -980,6 +991,8 @@
 				17192AD82567B3D500AAEACA /* XCRemoteSwiftPackageReference "Sparkle-Binary" */,
 				519CA8E325841DB700EB079A /* XCRemoteSwiftPackageReference "plcrashreporter" */,
 				179D280926F6F93D003B2E0A /* XCRemoteSwiftPackageReference "Zip" */,
+				DC4D73D32F5D1FED003A3A0E /* XCRemoteSwiftPackageReference "kokoro-ios" */,
+				DC4D73D62F5D1FED003A3A0E /* XCRemoteSwiftPackageReference "MLXUtilsLibrary" */,
 			);
 			preferredProjectObjectVersion = 46;
 			productRefGroup = 849C64611ED37A5D003D8FC0 /* Products */;
@@ -1615,6 +1628,22 @@
 				minimumVersion = 1.8.1;
 			};
 		};
+		DC4D73D32F5D1FED003A3A0E /* XCRemoteSwiftPackageReference "kokoro-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mlalma/kokoro-ios";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.0.11;
+			};
+		};
+		DC4D73D62F5D1FED003A3A0E /* XCRemoteSwiftPackageReference "MLXUtilsLibrary" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/mlalma/MLXUtilsLibrary.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.0.6;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -1765,6 +1794,16 @@
 		84EE434A2DB8A44C009D3A8D /* RSDatabase */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = RSDatabase;
+		};
+		DC4D73D42F5D1FED003A3A0E /* KokoroSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC4D73D32F5D1FED003A3A0E /* XCRemoteSwiftPackageReference "kokoro-ios" */;
+			productName = KokoroSwift;
+		};
+		DC4D73D72F5D1FED003A3A0E /* MLXUtilsLibrary */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = DC4D73D62F5D1FED003A3A0E /* XCRemoteSwiftPackageReference "MLXUtilsLibrary" */;
+			productName = MLXUtilsLibrary;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

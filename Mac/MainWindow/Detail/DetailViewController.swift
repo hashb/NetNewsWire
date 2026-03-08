@@ -11,6 +11,7 @@ import WebKit
 import RSCore
 import Articles
 import RSWeb
+import Combine
 
 enum DetailState: Equatable {
 	case noSelection
@@ -63,6 +64,8 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 
 	private var isArticleContentJavascriptEnabled = AppDefaults.shared.isArticleContentJavascriptEnabled
 
+	private var cancellables = Set<AnyCancellable>()
+
 	override func viewDidLoad() {
 		currentWebViewController = regularWebViewController
 		NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
@@ -70,11 +73,32 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 				self?.userDefaultsDidChange()
 			}
 		}
+
+		// Set up TTS delegate
+		TTSManager.shared.delegate = self
+
+		// Observe TTS hasAudio to show/hide controls
+		TTSManager.shared.$hasAudio
+			.receive(on: RunLoop.main)
+			.sink { [weak self] hasAudio in
+				guard let self else { return }
+				if hasAudio {
+					self.containerView.showTTSControls()
+				} else {
+					self.containerView.hideTTSControls()
+				}
+			}
+			.store(in: &cancellables)
 	}
 
 	// MARK: - API
 
 	func setState(_ state: DetailState, mode: TimelineSourceMode) {
+		// Stop TTS when article changes
+		if TTSManager.shared.hasAudio {
+			stopTTS()
+		}
+
 		switch mode {
 		case .regular:
 			detailStateForRegular = state
@@ -115,6 +139,35 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 		}
 		window.makeFirstResponderUnlessDescendantIsFirstResponder(currentWebViewController.webView)
 	}
+
+	// MARK: - TTS
+
+	/// Starts TTS for the current article.
+	func startTTS() {
+		guard AppDefaults.shared.isTTSEnabled else { return }
+
+		let tts = TTSManager.shared
+		if !tts.isModelLoaded {
+			tts.loadModel()
+		}
+
+		// Extract text from the web view
+		currentWebViewController.extractArticleText { [weak self] text in
+			guard let self, let text, !text.isEmpty else { return }
+
+			// Prepare word highlighting
+			self.currentWebViewController.prepareHighlighting()
+
+			// Start TTS
+			tts.say(text)
+		}
+	}
+
+	/// Stops TTS and clears highlighting.
+	func stopTTS() {
+		TTSManager.shared.stop()
+		currentWebViewController.clearHighlighting()
+	}
 }
 
 // MARK: - DetailWebViewControllerDelegate
@@ -133,6 +186,27 @@ extension DetailViewController: DetailWebViewControllerDelegate {
 			return
 		}
 		statusBarView.mouseoverLink = nil
+	}
+}
+
+// MARK: - TTSManagerDelegate
+
+extension DetailViewController: TTSManagerDelegate {
+
+	func ttsDidStartPlaying() {
+		// Controls shown via Combine binding on hasAudio
+	}
+
+	func ttsDidStopPlaying() {
+		currentWebViewController.clearHighlighting()
+	}
+
+	func ttsDidUpdateCurrentTokenIndex(_ index: Int) {
+		currentWebViewController.highlightWord(at: index)
+	}
+
+	func ttsDidFinishGenerating() {
+		// No action needed
 	}
 }
 

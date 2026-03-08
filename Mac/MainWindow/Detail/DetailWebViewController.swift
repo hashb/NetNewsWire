@@ -89,6 +89,13 @@ final class DetailWebViewController: NSViewController {
 		configuration.userContentController.add(self, name: MessageName.mouseDidEnter)
 		configuration.userContentController.add(self, name: MessageName.mouseDidExit)
 
+		// Inject TTS highlighting JavaScript
+		if let ttsJSURL = Bundle.main.url(forResource: "tts_highlight", withExtension: "js"),
+		   let ttsJS = try? String(contentsOf: ttsJSURL, encoding: .utf8) {
+			let ttsScript = WKUserScript(source: ttsJS, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+			configuration.userContentController.addUserScript(ttsScript)
+		}
+
 		webView = DetailWebView(frame: NSRect.zero, configuration: configuration)
 		webView.uiDelegate = self
 		webView.navigationDelegate = self
@@ -170,6 +177,39 @@ final class DetailWebViewController: NSViewController {
 
 	override func scrollPageUp(_ sender: Any?) {
 		webView.scrollPageUp(sender)
+	}
+
+	// MARK: - TTS Integration
+
+	/// Extracts plain text from the article body via JavaScript.
+	func extractArticleText(completion: @escaping (String?) -> Void) {
+		webView.evaluateJavaScript("ttsGetArticleText()") { result, error in
+			if let error {
+				print("TTS: Error extracting text: \(error)")
+				completion(nil)
+				return
+			}
+			completion(result as? String)
+		}
+	}
+
+	/// Prepares word-level highlighting spans in the article body.
+	func prepareHighlighting() {
+		webView.evaluateJavaScript("ttsPrepareHighlighting()") { result, error in
+			if let error {
+				print("TTS: Error preparing highlighting: \(error)")
+			}
+		}
+	}
+
+	/// Highlights the word at the given index.
+	func highlightWord(at index: Int) {
+		webView.evaluateJavaScript("ttsHighlightWord(\(index))")
+	}
+
+	/// Clears all TTS word highlighting.
+	func clearHighlighting() {
+		webView.evaluateJavaScript("ttsClearHighlighting()")
 	}
 }
 
