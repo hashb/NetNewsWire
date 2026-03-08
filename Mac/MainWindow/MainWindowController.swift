@@ -100,6 +100,12 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 
 		detailViewController = splitViewController?.splitViewItems[2].viewController as? DetailViewController
 
+		if #available(macOS 26.0, *) {
+			// On macOS 26, Liquid Glass handles the toolbar/content boundary.
+		} else {
+			splitViewController?.splitViewItems[2].titlebarSeparatorStyle = .line
+		}
+
 		NotificationCenter.default.addObserver(self, selector: #selector(refreshProgressDidChange(_:)), name: .AccountRefreshDidBegin, object: nil)
 		NotificationCenter.default.addObserver(self, selector: #selector(refreshProgressDidChange(_:)), name: .AccountRefreshDidFinish, object: nil)
 		NotificationCenter.default.addObserver(self, selector: #selector(refreshProgressDidChange(_:)), name: .progressInfoDidChange, object: CombinedRefreshProgress.shared)
@@ -647,7 +653,7 @@ extension MainWindowController: TimelineContainerViewControllerDelegate {
 		if let articles = articles {
 			if articles.count == 1 {
 				activityManager.reading(feed: nil, article: articles.first)
-				if articles.first?.feed?.isArticleExtractorAlwaysOn ?? false {
+				if articles.first?.feed?.readerViewAlwaysEnabled == true {
 					detailState = .loading
 					startArticleExtractorForCurrentLink()
 				} else {

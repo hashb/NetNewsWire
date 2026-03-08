@@ -73,9 +73,9 @@ final class ReaderAPIAccountDelegate: AccountDelegate {
 		}
 	}
 
-	weak var accountMetadata: AccountMetadata? {
+	weak var accountSettings: AccountSettings? {
 		didSet {
-			caller.accountMetadata = accountMetadata
+			caller.accountSettings = accountSettings
 		}
 	}
 
@@ -113,6 +113,10 @@ final class ReaderAPIAccountDelegate: AccountDelegate {
 
 	func refreshAll(for account: Account) async throws {
 		Self.logger.debug("ReaderAPIAccountDelegate: refreshAll")
+
+		if credentials == nil {
+			credentials = try? account.retrieveCredentials(type: .readerAPIKey)
+		}
 
 		refreshProgress.addTasks(6)
 
@@ -273,8 +277,6 @@ final class ReaderAPIAccountDelegate: AccountDelegate {
 
 					do {
 						try await caller.deleteSubscription(subscriptionID: subscriptionID)
-						account.clearFeedMetadata(feed)
-
 						refreshProgress.completeTask()
 					} catch {
 
@@ -368,7 +370,6 @@ final class ReaderAPIAccountDelegate: AccountDelegate {
 
 		do {
 			try await caller.deleteSubscription(subscriptionID: subscriptionID)
-			account.clearFeedMetadata(feed)
 			account.removeAllInstancesOfFeedFromTreeAtAllLevels(feed)
 		} catch {
 			Self.logger.error("ReaderAPIAccountDelegate: removeFeed - error: \(error.localizedDescription)")
@@ -512,9 +513,12 @@ final class ReaderAPIAccountDelegate: AccountDelegate {
 	}
 
 	/// Make sure no SQLite databases are open and we are ready to issue network requests.
-	func resume() {
+	func resume(account: Account) {
 		Self.logger.debug("ReaderAPIAccountDelegate: resume")
 
+		if credentials == nil {
+			credentials = try? account.retrieveCredentials(type: .readerAPIKey)
+		}
 		syncDatabase.resume()
 	}
 
@@ -613,7 +617,6 @@ private extension ReaderAPIAccountDelegate {
 
 		for feed in account.topLevelFeeds {
 			if !subFeedIds.contains(feed.feedID) {
-				account.clearFeedMetadata(feed)
 				account.removeFeedFromTreeAtTopLevel(feed)
 			}
 		}

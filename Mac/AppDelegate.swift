@@ -212,6 +212,7 @@ let appName = "NetNewsWire"
 
 		ArticleThemesManager.shared.start()
 		NetworkMonitor.shared.start()
+		MemoryPressureMonitor.shared.start()
 
 #if !SKIP_APP_GROUP_ACCESS
 		ExtensionContainersFile.shared.start()
@@ -291,7 +292,7 @@ let appName = "NetNewsWire"
 	}
 
 	func applicationDidResignActive(_ notification: Notification) {
-		ArticleStringFormatter.emptyCaches()
+		postLowMemoryNotification()
 		saveState()
 	}
 
@@ -335,10 +336,10 @@ let appName = "NetNewsWire"
 
 	@objc func feedSettingDidChange(_ note: Notification) {
 		MainActor.assumeIsolated {
-			guard let feed = note.object as? Feed, let key = note.userInfo?[Feed.SettingUserInfoKey] as? String else {
+			guard let feed = note.object as? Feed, let key = note.userInfo?[Feed.SettingUserInfoKey] as? Feed.SettingKey else {
 				return
 			}
-			if key == Feed.SettingKey.homePageURL || key == Feed.SettingKey.faviconURL {
+			if key == .homePageURL || key == .faviconURL {
 				_ = FaviconDownloader.shared.favicon(for: feed)
 			}
 		}
