@@ -25,6 +25,7 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 	@IBOutlet var containerView: DetailContainerView!
 	@IBOutlet var statusBarView: DetailStatusBarView!
 
+	private lazy var speechControlsView = ArticleSpeechControlsView()
 	private lazy var regularWebViewController = createWebViewController()
 	private var searchWebViewController: DetailWebViewController?
 
@@ -65,6 +66,7 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 
 	override func viewDidLoad() {
 		currentWebViewController = regularWebViewController
+		setupArticleSpeechControls()
 		NotificationCenter.default.addObserver(forName: UserDefaults.didChangeNotification, object: nil, queue: .main) { [weak self] _ in
 			Task { @MainActor in
 				self?.userDefaultsDidChange()
@@ -91,6 +93,29 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 		currentWebViewController.stopMediaPlayback()
 	}
 
+	var articleSpeechControlsView: ArticleSpeechControlsView {
+		speechControlsView
+	}
+
+	var articleSpeechUserScrollAction: (() -> Void)? {
+		didSet {
+			regularWebViewController.userScrollAction = articleSpeechUserScrollAction
+			searchWebViewController?.userScrollAction = articleSpeechUserScrollAction
+		}
+	}
+
+	func prepareArticleSpeech() async throws -> ArticleSpeechDocument {
+		try await currentWebViewController.prepareArticleSpeech()
+	}
+
+	func setArticleSpeechHighlight(_ tokenID: String?, scrollToHighlight: Bool) {
+		currentWebViewController.setArticleSpeechHighlight(tokenID, scrollToHighlight: scrollToHighlight)
+	}
+
+	func clearArticleSpeech() {
+		currentWebViewController.clearArticleSpeech()
+	}
+
 	func canScrollDown() async -> Bool {
 		await currentWebViewController.canScrollDown()
 	}
@@ -100,10 +125,12 @@ final class DetailViewController: NSViewController, WKUIDelegate {
 	}
 
 	override func scrollPageDown(_ sender: Any?) {
+		articleSpeechUserScrollAction?()
 		currentWebViewController.scrollPageDown(sender)
 	}
 
 	override func scrollPageUp(_ sender: Any?) {
+		articleSpeechUserScrollAction?()
 		currentWebViewController.scrollPageUp(sender)
 	}
 
@@ -140,10 +167,25 @@ extension DetailViewController: DetailWebViewControllerDelegate {
 
 private extension DetailViewController {
 
+	func setupArticleSpeechControls() {
+		speechControlsView.translatesAutoresizingMaskIntoConstraints = false
+		containerView.addSubview(speechControlsView)
+
+		let minimumWidth = speechControlsView.widthAnchor.constraint(greaterThanOrEqualToConstant: 560)
+		minimumWidth.priority = .defaultHigh
+		NSLayoutConstraint.activate([
+			speechControlsView.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+			speechControlsView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor, constant: -16),
+			speechControlsView.widthAnchor.constraint(lessThanOrEqualTo: containerView.widthAnchor, multiplier: 0.92),
+			minimumWidth
+		])
+	}
+
 	func createWebViewController() -> DetailWebViewController {
 		let controller = DetailWebViewController()
 		controller.delegate = self
 		controller.state = .noSelection
+		controller.userScrollAction = articleSpeechUserScrollAction
 		return controller
 	}
 
@@ -152,10 +194,9 @@ private extension DetailViewController {
 		case .regular:
 			return regularWebViewController
 		case .search:
-			if searchWebViewController == nil {
-				searchWebViewController = createWebViewController()
-			}
-			return searchWebViewController!
+			let vc = searchWebViewController ?? createWebViewController()
+			searchWebViewController = vc
+			return vc
 		}
 	}
 

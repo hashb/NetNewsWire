@@ -19,7 +19,6 @@ import RSCoreResources
 import RSWeb
 import Secrets
 import CrashReporter
-import Sparkle
 import Images
 import HTMLMetadata
 
@@ -28,7 +27,7 @@ let appName = "NetNewsWire"
 @MainActor var appDelegate: AppDelegate!
 
 @main
-@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSUserInterfaceValidations, UNUserNotificationCenterDelegate, UnreadCountProvider, SPUStandardUserDriverDelegate, SPUUpdaterDelegate {
+@MainActor final class AppDelegate: NSObject, NSApplicationDelegate, NSUserInterfaceValidations, UNUserNotificationCenterDelegate, UnreadCountProvider {
 
 	static private let logger = Logger(subsystem: Bundle.main.bundleIdentifier!, category: "AppDelegate")
 
@@ -99,7 +98,6 @@ let appName = "NetNewsWire"
 	private var cloudKitStatsWindowController: CloudKitStatsWindowController?
 	private var accountStatsWindowController: AccountStatsWindowController?
 	private let appMovementMonitor: RSAppMovementMonitor
-	private var softwareUpdater: SPUUpdater?
 	private var crashReporter: PLCrashReporter?
 
 	private var themeImportPath: String?
@@ -166,27 +164,6 @@ let appName = "NetNewsWire"
 
 		Task {
 			await WebViewConfiguration.compileContentBlockingRules()
-		}
-
-		// Ensure the Sparkle feed URL is one of the two supported URLs.
-		// Default to the release builds URL from Info.plist.
-		if let infoDictionary = Bundle.main.infoDictionary,
-		   let releaseBuildsURL = infoDictionary["SUFeedURL"] as? String,
-		   let testBuildsURL = infoDictionary["FeedURLForTestBuilds"] as? String,
-		   let currentFeedURL = UserDefaults.standard.string(forKey: "SUFeedURL"),
-		   currentFeedURL != releaseBuildsURL && currentFeedURL != testBuildsURL {
-			UserDefaults.standard.set(releaseBuildsURL, forKey: "SUFeedURL")
-		}
-
-		// Initialize Sparkle...
-		let hostBundle = Bundle.main
-		let updateDriver = SPUStandardUserDriver(hostBundle: hostBundle, delegate: self)
-		softwareUpdater = SPUUpdater(hostBundle: hostBundle, applicationBundle: hostBundle, userDriver: updateDriver, delegate: self)
-
-		do {
-			try softwareUpdater?.start()
-		} catch {
-			Self.logger.error("Failed to start software updater with error: \(error.localizedDescription)")
 		}
 
 		AppDefaults.shared.registerDefaults()
@@ -506,6 +483,10 @@ let appName = "NetNewsWire"
 			return AccountManager.shared.hasiCloudAccount
 		}
 
+		if item.action == #selector(checkForUpdates(_:)) {
+			return false
+		}
+
 		if item.action == #selector(toggleWebInspectorEnabled(_:)) {
 			(item as! NSMenuItem).state = AppDefaults.shared.webInspectorEnabled ? .on : .off
 		}
@@ -769,7 +750,6 @@ let appName = "NetNewsWire"
 	}
 
 	@IBAction func checkForUpdates(_ sender: Any?) {
-		softwareUpdater?.checkForUpdates()
 	}
 }
 

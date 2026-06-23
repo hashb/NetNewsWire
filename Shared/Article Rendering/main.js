@@ -156,6 +156,168 @@ function removeWpSmiley() {
 	}
 }
 
+var ArticleSpeech = {
+	currentTokenID: null,
+	tokenCounter: 0,
+	tokens: []
+};
+
+function ensureArticleSpeechStyle() {
+	if (document.getElementById("nnwArticleSpeechStyle")) {
+		return;
+	}
+
+	const style = document.createElement("style");
+	style.id = "nnwArticleSpeechStyle";
+	style.textContent = `
+		.nnw-speech-token.nnw-speech-current {
+			background: rgba(255, 214, 10, 0.36);
+			border-radius: 3px;
+			box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.22);
+			-webkit-box-decoration-break: clone;
+			box-decoration-break: clone;
+			transition: background-color 80ms linear;
+		}
+
+		@media(prefers-color-scheme: dark) {
+			.nnw-speech-token.nnw-speech-current {
+				background: rgba(255, 214, 10, 0.30);
+				box-shadow: 0 0 0 2px rgba(255, 214, 10, 0.18);
+			}
+		}
+	`;
+	document.head.appendChild(style);
+}
+
+function articleSpeechRoots() {
+	return Array.from(document.querySelectorAll(".articleTitle h1, #bodyContainer"))
+		.filter(element => element.innerText && element.innerText.trim().length > 0);
+}
+
+function articleSpeechElementIsHidden(element) {
+	if (!element || element.nodeType !== Node.ELEMENT_NODE) {
+		return false;
+	}
+
+	if (element.closest("script, style, noscript, iframe, video, audio, pre, code, .externalLink, .headerContainer, .systemMessage, .x-netnewswire-hide")) {
+		return true;
+	}
+
+	const style = window.getComputedStyle(element);
+	return style.display === "none" || style.visibility === "hidden" || style.opacity === "0";
+}
+
+function articleSpeechTextNodes(root) {
+	const nodes = [];
+	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+		acceptNode: function(node) {
+			if (!node.nodeValue || node.nodeValue.trim().length === 0) {
+				return NodeFilter.FILTER_REJECT;
+			}
+			if (articleSpeechElementIsHidden(node.parentElement)) {
+				return NodeFilter.FILTER_REJECT;
+			}
+			return NodeFilter.FILTER_ACCEPT;
+		}
+	});
+
+	while (walker.nextNode()) {
+		nodes.push(walker.currentNode);
+	}
+	return nodes;
+}
+
+function wrapArticleSpeechTextNode(textNode) {
+	const text = textNode.nodeValue;
+	const tokenPattern = /(\s+|[\p{L}\p{N}]+(?:[\u2019'][\p{L}\p{N}]+)?|[^\s\p{L}\p{N}])/gu;
+	const fragment = document.createDocumentFragment();
+	let match;
+
+	while ((match = tokenPattern.exec(text)) !== null) {
+		const part = match[0];
+		if (/^\s+$/.test(part)) {
+			fragment.appendChild(document.createTextNode(part));
+			continue;
+		}
+
+		const span = document.createElement("span");
+		const id = "nnw-speech-token-" + ArticleSpeech.tokenCounter++;
+		span.className = "nnw-speech-token";
+		span.setAttribute("data-nnw-speech-id", id);
+		span.textContent = part;
+		fragment.appendChild(span);
+		ArticleSpeech.tokens.push({ id: id, text: part });
+	}
+
+	textNode.parentNode.replaceChild(fragment, textNode);
+}
+
+function clearArticleSpeechHighlight() {
+	if (ArticleSpeech.currentTokenID) {
+		const previous = document.querySelector(`span[data-nnw-speech-id="${CSS.escape(ArticleSpeech.currentTokenID)}"]`);
+		if (previous) {
+			previous.classList.remove("nnw-speech-current");
+		}
+		ArticleSpeech.currentTokenID = null;
+	}
+}
+
+function clearArticleSpeech() {
+	clearArticleSpeechHighlight();
+	document.querySelectorAll("span.nnw-speech-token").forEach(span => {
+		span.parentNode.replaceChild(document.createTextNode(span.textContent), span);
+	});
+	document.body.normalize();
+	ArticleSpeech.tokenCounter = 0;
+	ArticleSpeech.tokens = [];
+}
+
+function prepareArticleSpeech() {
+	clearArticleSpeech();
+	ensureArticleSpeechStyle();
+
+	const roots = articleSpeechRoots();
+	roots.forEach(root => {
+		articleSpeechTextNodes(root).forEach(wrapArticleSpeechTextNode);
+	});
+
+	const text = roots
+		.map(root => root.innerText.trim())
+		.filter(text => text.length > 0)
+		.join("\n\n");
+
+	return {
+		text: text,
+		tokens: ArticleSpeech.tokens
+	};
+}
+
+function setArticleSpeechHighlight(tokenID, scrollToHighlight = true) {
+	clearArticleSpeechHighlight();
+	if (!tokenID) {
+		return;
+	}
+
+	const element = document.querySelector(`span[data-nnw-speech-id="${CSS.escape(tokenID)}"]`);
+	if (!element) {
+		return;
+	}
+
+	element.classList.add("nnw-speech-current");
+	ArticleSpeech.currentTokenID = tokenID;
+
+	if (!scrollToHighlight) {
+		return;
+	}
+
+	const rect = element.getBoundingClientRect();
+	const topInset = 88;
+	const bottomInset = 120;
+	if (rect.top < topInset || rect.bottom > window.innerHeight - bottomInset) {
+		element.scrollIntoView({ block: "center", inline: "nearest" });
+	}
+}
+
 function processPage() {
 	wrapFrames();
 	wrapTables();

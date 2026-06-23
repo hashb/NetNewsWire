@@ -21,6 +21,13 @@ import Images
 final class DetailWebViewController: NSViewController {
 
 	weak var delegate: DetailWebViewControllerDelegate?
+	var userScrollAction: (() -> Void)? {
+		didSet {
+			if isViewLoaded {
+				webView.userScrollAction = userScrollAction
+			}
+		}
+	}
 	var webView: DetailWebView!
 	var state: DetailState = .noSelection {
 		didSet {
@@ -95,6 +102,7 @@ final class DetailWebViewController: NSViewController {
 		webView.uiDelegate = self
 		webView.navigationDelegate = self
 		webView.keyboardDelegate = keyboardDelegate
+		webView.userScrollAction = userScrollAction
 		webView.translatesAutoresizingMaskIntoConstraints = false
 		if let userAgent = UserAgent.fromInfoPlist() {
 			webView.customUserAgent = userAgent
@@ -152,6 +160,23 @@ final class DetailWebViewController: NSViewController {
 
 	func stopMediaPlayback() {
 		webView.evaluateJavaScript("stopMediaPlayback();")
+	}
+
+	func prepareArticleSpeech() async throws -> ArticleSpeechDocument {
+		let result = try await webView.evaluateJavaScript("JSON.stringify(prepareArticleSpeech());")
+		guard let json = result as? String, let data = json.data(using: .utf8) else {
+			throw ArticleSpeechWebError.invalidSpeechDocument
+		}
+		return try JSONDecoder().decode(ArticleSpeechDocument.self, from: data)
+	}
+
+	func setArticleSpeechHighlight(_ tokenID: String?, scrollToHighlight: Bool) {
+		let argument = tokenID.map(Self.javaScriptStringLiteral) ?? "null"
+		webView.evaluateJavaScript("setArticleSpeechHighlight(\(argument), \(scrollToHighlight));")
+	}
+
+	func clearArticleSpeech() {
+		webView.evaluateJavaScript("clearArticleSpeech();")
 	}
 
 	// MARK: Scrolling
@@ -349,6 +374,17 @@ private extension DetailWebViewController {
 	@objc func webInspectorEnabledDidChange(_ notification: Notification) {
 		self.webInspectorEnabled = notification.object! as! Bool
 	}
+
+	static func javaScriptStringLiteral(_ string: String) -> String {
+		guard let data = try? JSONEncoder().encode(string),
+			  let literal = String(data: data, encoding: .utf8) else {
+			let escaped = string
+				.replacingOccurrences(of: "\\", with: "\\\\")
+				.replacingOccurrences(of: "\"", with: "\\\"")
+			return "\"\(escaped)\""
+		}
+		return literal
+	}
 }
 
 // MARK: - ScrollInfo
@@ -368,5 +404,13 @@ private struct ScrollInfo {
 
 		self.canScrollDown = viewHeight + offsetY < contentHeight
 		self.canScrollUp = offsetY > 0.1
+	}
+}
+
+private enum ArticleSpeechWebError: LocalizedError {
+	case invalidSpeechDocument
+
+	var errorDescription: String? {
+		NSLocalizedString("Could not read article text.", comment: "Article speech error")
 	}
 }

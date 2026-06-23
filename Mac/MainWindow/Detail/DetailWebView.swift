@@ -12,7 +12,9 @@ import RSCore
 
 final class DetailWebView: WKWebView {
 	weak var keyboardDelegate: KeyboardDelegate?
+	var userScrollAction: (() -> Void)?
 	private var isObservingResizeNotifications = false
+	private static let scrollKeyCodes: Set<UInt16> = [49, 115, 116, 119, 121, 123, 124, 125, 126]
 
 	private static let estimatedToolbarHeight: CGFloat = 52 // Height of macOS 26.2 icon-only toolbar
 	private var toolbarHeight: CGFloat {
@@ -50,7 +52,15 @@ final class DetailWebView: WKWebView {
 		if keyboardDelegate?.keydown(event, in: self) ?? false {
 			return
 		}
+		if Self.isScrollKey(event) {
+			userScrollAction?()
+		}
 		super.keyDown(with: event)
+	}
+
+	override func scrollWheel(with event: NSEvent) {
+		userScrollAction?()
+		super.scrollWheel(with: event)
 	}
 
 	// MARK: - NSView
@@ -138,5 +148,13 @@ private extension DetailWebView {
 				obscuredContentInsets = updatedObscuredContentInsets
 			}
 		}
+	}
+
+	static func isScrollKey(_ event: NSEvent) -> Bool {
+		let flags = event.modifierFlags.intersection(.deviceIndependentFlagsMask)
+		guard flags.subtracting([.numericPad, .shift]).isEmpty else {
+			return false
+		}
+		return scrollKeyCodes.contains(event.keyCode)
 	}
 }

@@ -26,6 +26,7 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 
 	private var isShowingExtractedArticle = false
 	private var articleExtractor: ArticleExtractor?
+	private var articleSpeechController: ArticleSpeechController?
 	private var sharingServicePickerDelegate: NSSharingServicePickerDelegate?
 
 	private let windowAutosaveName = NSWindow.FrameAutosaveName("MainWindow")
@@ -99,6 +100,14 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 		}
 
 		detailViewController = splitViewController?.splitViewItems[2].viewController as? DetailViewController
+		if let detailViewController {
+			articleSpeechController = ArticleSpeechController(
+				detailViewController: detailViewController,
+				controlsView: detailViewController.articleSpeechControlsView,
+				invalidateToolbar: { [weak self] in
+					self?.makeToolbarValidate()
+				})
+		}
 
 		if #unavailable(macOS 26.0) {
 			splitViewController?.splitViewItems[2].titlebarSeparatorStyle = .line
@@ -274,6 +283,10 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 			return validateToggleArticleExtractor(item)
 		}
 
+		if item.action == #selector(toggleArticleSpeech(_:)) {
+			return validateToggleArticleSpeech(item)
+		}
+
 		if item.action == #selector(toolbarShowShareMenu(_:)) {
 			return canShowShareMenu()
 		}
@@ -428,6 +441,7 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 		guard let currentLink = currentLink, let article = oneSelectedArticle else {
 			return
 		}
+		articleSpeechController?.stop()
 
 		defer {
 			makeToolbarValidate()
@@ -564,6 +578,10 @@ final class MainWindowController: NSWindowController, NSUserInterfaceValidations
 		timelineContainerViewController?.toggleReadFilter()
 	}
 
+	@IBAction func toggleArticleSpeech(_ sender: Any?) {
+		articleSpeechController?.toggleSpeech()
+	}
+
 	@objc func selectArticleTheme(_ menuItem: NSMenuItem) {
 		ArticleThemesManager.shared.currentThemeName = menuItem.title
 	}
@@ -590,6 +608,7 @@ extension MainWindowController: NSWindowDelegate {
 
 	func windowWillClose(_ notification: Notification) {
 		Self.logger.debug("MainWindowController: windowWillClose")
+		articleSpeechController?.stop()
 		detailViewController?.stopMediaPlayback()
 		appDelegate.removeMainWindow(self)
 	}
@@ -633,6 +652,7 @@ extension MainWindowController: TimelineContainerViewControllerDelegate {
 	func timelineSelectionDidChange(_: TimelineContainerViewController, articles: [Article]?, mode: TimelineSourceMode) {
 		activityManager.invalidateReading()
 
+		articleSpeechController?.stop()
 		articleExtractor?.cancel()
 		articleExtractor = nil
 		isShowingExtractedArticle = false
@@ -795,6 +815,7 @@ extension NSToolbarItem.Identifier {
 	static let markRead = NSToolbarItem.Identifier("markRead")
 	static let markStar = NSToolbarItem.Identifier("markStar")
 	static let readerView = NSToolbarItem.Identifier("readerView")
+	static let articleSpeech = NSToolbarItem.Identifier("articleSpeech")
 	static let openInBrowser = NSToolbarItem.Identifier("openInBrowser")
 	static let share = NSToolbarItem.Identifier("share")
 	static let articleThemeMenu = NSToolbarItem.Identifier("articleThemeMenu")
@@ -854,6 +875,10 @@ extension MainWindowController: NSToolbarDelegate {
 			toolbarItem.view = button
 			return toolbarItem
 
+		case .articleSpeech:
+			let title = NSLocalizedString("Read Aloud", comment: "Read Aloud")
+			return buildToolbarButton(.articleSpeech, title, Assets.Images.speechPlay, "toggleArticleSpeech:")
+
 		case .share:
 			let title = NSLocalizedString("Share", comment: "Share button")
 			return buildToolbarButton(.share, title, Assets.Images.share, "toolbarShowShareMenu:")
@@ -901,6 +926,7 @@ extension MainWindowController: NSToolbarDelegate {
 			.markRead,
 			.markStar,
 			.readerView,
+			.articleSpeech,
 			.openInBrowser,
 			.share,
 			.articleThemeMenu,
@@ -923,6 +949,7 @@ extension MainWindowController: NSToolbarDelegate {
 			.markStar,
 			.nextUnread,
 			.readerView,
+			.articleSpeech,
 			.share,
 			.openInBrowser,
 			.flexibleSpace,
@@ -1193,6 +1220,25 @@ private extension MainWindowController {
 		}
 
 		return state != .processing
+	}
+
+	func validateToggleArticleSpeech(_ item: NSValidatedUserInterfaceItem) -> Bool {
+		let isActive = articleSpeechController?.isActive ?? false
+		let commandName = isActive ? NSLocalizedString("Stop Reading", comment: "Command") : NSLocalizedString("Read Aloud", comment: "Command")
+
+		if let toolbarItem = item as? NSToolbarItem {
+			toolbarItem.toolTip = commandName
+			toolbarItem.label = commandName
+			if let button = toolbarItem.view as? NSButton {
+				button.image = isActive ? Assets.Images.speechStop : Assets.Images.speechPlay
+			}
+		}
+
+		if let menuItem = item as? NSMenuItem {
+			menuItem.title = commandName
+		}
+
+		return isActive || oneSelectedArticle != nil
 	}
 
 	func canMarkAboveArticlesAsRead() -> Bool {

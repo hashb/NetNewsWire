@@ -207,6 +207,7 @@ final class TimelineViewController: NSViewController, UndoableCommandRunner, Unr
 	}
 
 	private var previouslySelectedArticles: ArticleArray?
+	private var ignoreNextEmptySelectionAfterAutomaticMarkRead = false
 
 	private var oneSelectedArticle: Article? {
 		return selectedArticles.count == 1 ? selectedArticles.first : nil
@@ -940,15 +941,25 @@ extension TimelineViewController: NSTableViewDelegate {
 	}
 
 	func tableViewSelectionDidChange(_ notification: Notification) {
+		let selectedArticles = selectedArticles
 		if selectedArticles.isEmpty {
+			if ignoreNextEmptySelectionAfterAutomaticMarkRead {
+				ignoreNextEmptySelectionAfterAutomaticMarkRead = false
+				return
+			}
 			selectionDidChange(nil)
 			return
 		}
 
+		ignoreNextEmptySelectionAfterAutomaticMarkRead = false
+
 		if selectedArticles.count == 1 {
 			let article = selectedArticles.first!
 			if !article.status.read {
-				markArticles(Set([article]), statusKey: .read, flag: true)
+				ignoreNextEmptySelectionAfterAutomaticMarkRead = isReadFiltered == true
+				markArticles(Set([article]), statusKey: .read, flag: true) { [weak self] in
+					self?.ignoreNextEmptySelectionAfterAutomaticMarkRead = false
+				}
 			}
 		}
 
