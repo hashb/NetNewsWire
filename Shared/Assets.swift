@@ -46,6 +46,8 @@ struct Assets {
 		static var articleExtractorOn: RSImage { RSImage(named: "articleExtractorOn")! }
 		static var articleExtractorOff: RSImage { RSImage(named: "articleExtractorOff")! }
 		static let share = RSImage(symbol: "square.and.arrow.up")!
+		static var speechPlay: RSImage { RSImage(symbol: "play.fill")! }
+		static var speechStop: RSImage { RSImage(symbol: "stop.fill")! }
 		static let folder = RSImage(symbol: "folder")!
 		static let starredFeed = IconImage(starClosed, isSymbol: true, isBackgroundSuppressed: true, preferredColor: Assets.Colors.star)
 

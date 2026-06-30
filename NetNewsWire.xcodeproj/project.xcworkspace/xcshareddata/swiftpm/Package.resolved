@@ -1,6 +1,24 @@
 {
-  "originHash" : "1dc84bfa5ec4e6d8fb1e2092be6a131b44546f89608b898a48152662e8f5b1dd",
+  "originHash" : "7260e8575245633c1a2b7e679634d64d90fc6bfb81c1214b7c368131fad7027b",
   "pins" : [
+    {
+      "identity" : "cbor",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/edgeengineer/cbor.git",
+      "state" : {
+        "revision" : "a64323cc11eb8b4d7005dfd2feadacfd5f59f547",
+        "version" : "0.0.6"
+      }
+    },
+    {
+      "identity" : "kokoro-coreml",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/hashb/kokoro-coreml.git",
+      "state" : {
+        "branch" : "dev",
+        "revision" : "c5b3d12ec686c6b96da22ef6d7877afbb02db96f"
+      }
+    },
     {
       "identity" : "plcrashreporter",
       "kind" : "remoteSourceControl",
@@ -11,12 +29,21 @@
       }
     },
     {
-      "identity" : "sparkle-binary",
+      "identity" : "swift-argument-parser",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/Ranchero-Software/Sparkle-Binary.git",
+      "location" : "https://github.com/apple/swift-argument-parser.git",
       "state" : {
-        "revision" : "d1a8b3c98d96c601453f2e4230f1dd65b60d0581",
-        "version" : "2.0.1"
+        "revision" : "626b5b7b2f45e1b0b1c6f4a309296d1d21d7311b",
+        "version" : "1.7.1"
+      }
+    },
+    {
+      "identity" : "swift-bart-g2p",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Jud/swift-bart-g2p.git",
+      "state" : {
+        "revision" : "1ed781e05fba7b4042212aecb6124a3aab83ce45",
+        "version" : "0.4.0"
       }
     },
     {
